@@ -1,9 +1,9 @@
-import { HomeView } from './views/HomeView.js';
-import { AboutView } from './views/AboutView.js';
-import { ItemDetailView } from './views/ItemDetailView.js';
-import { DiagnosticView } from './views/DiagnosticView.js';
-import { FavoritesView } from './views/FavoritesView.js';
-import { NotFoundView } from './views/NotFoundView.js'; 
+import { HomeView } from '../views/HomeView.js';
+import { AboutView } from '../views/AboutView.js';
+import { ItemDetailView } from '../views/ItemDetailView.js';
+import { DiagnosticView } from '../views/DiagnosticView.js';
+import { FavoritesView } from '../views/FavoritesView.js';
+import { NotFoundView } from '../views/NotFoundView.js'; 
 
 const routes = {
     '/': HomeView,
