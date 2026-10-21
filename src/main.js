@@ -1,5 +1,6 @@
 import { matchRoute } from './router/router.js';
 import { getLocal, setLocal, getCookie, setCookie } from './utils/storage.js';
+import { registerServiceWorker } from './services/registerSW.js';
 
 const temaGuardado = getLocal('theme') || 'light';
 document.documentElement.setAttribute('data-theme', temaGuardado);
@@ -13,7 +14,7 @@ async function navigateTo(url) {
 }
 
 async function handleRender() {
-    const path = window.location.pathname;
+    const path = window.location.pathname; 
     const { component, params } = matchRoute(path);
     const app = document.getElementById('app');
     app.innerHTML = '';
@@ -31,4 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.addEventListener('popstate', handleRender);
     handleRender();
+});
+window.addEventListener('load', () => {
+    registerServiceWorker();
 });

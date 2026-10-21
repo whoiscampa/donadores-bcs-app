@@ -6,11 +6,13 @@ import { FavoritesView } from '../views/FavoritesView.js';
 import { NotFoundView } from '../views/NotFoundView.js'; 
 
 const routes = {
-    '/': HomeView,
+   '/': HomeView,
     '/about': AboutView,
     '/detalle': ItemDetailView,
+    '/detalle/:id': ItemDetailView,
+    '/item/:id': ItemDetailView, 
     '/diagnostico': DiagnosticView,
-    '/favoritos': FavoritesView 
+    '/favoritos': FavoritesView
 };
 
 export function matchRoute(path) {
