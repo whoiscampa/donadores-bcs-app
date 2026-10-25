@@ -2,6 +2,12 @@ const CACHE_NAME = 'donadores-bcs-shell-v3';
 const APP_SHELL = [
     '/',
     '/index.html',
+    '/manifest.json', 
+    '/icons/icon-192.png', 
+    '/icons/icon-512.png',
+    '/icons/icon-512-maskable.png',
+    '/icons/apple-touch-icon.png',
+    '/icons/favicon-32x32.ico',
     '/styles/main.css',
     '/styles/shell.css',
     '/src/main.js',
@@ -127,7 +133,7 @@ self.addEventListener('fetch', (event) => {
         return; 
     }
 
-    if (request.mode === 'navigate') {
+   if (request.mode === 'navigate') {
         event.respondWith(
             caches.match('/index.html')
                 .then((cachedResponse) => {
@@ -136,9 +142,12 @@ self.addEventListener('fetch', (event) => {
                 })
                 .then((cachedResponse) => {
                     if (cachedResponse) return cachedResponse;
+                    return caches.match('./index.html'); 
+                })
+                .then((cachedResponse) => {
+                    if (cachedResponse) return cachedResponse;
                     return fetch(request).catch(() => caches.match('/index.html'));
                 })
-                .catch(() => caches.match('/index.html'))
         );
         return;
     }
