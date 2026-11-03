@@ -6,7 +6,7 @@ import { FavoritesView } from '../views/FavoritesView.js';
 import { NotFoundView } from '../views/NotFoundView.js'; 
 
 const routes = {
-   '/': HomeView,
+    '/': HomeView,
     '/about': AboutView,
     '/detalle': ItemDetailView,
     '/detalle/:id': ItemDetailView,
@@ -16,6 +16,11 @@ const routes = {
 };
 
 export function matchRoute(path) {
+    const basePath = '/donadores-bcs-app';
+    if (path.startsWith(basePath)) {
+        path = path.slice(basePath.length) || '/';
+    }
+
     if (routes[path]) {
         return { component: routes[path], params: {} };
     }
