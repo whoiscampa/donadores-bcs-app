@@ -1,6 +1,7 @@
 import { matchRoute } from './router/router.js';
 import { getLocal, setLocal, getCookie, setCookie } from './utils/storage.js';
 import { registerServiceWorker } from './services/registerSW.js';
+import { initInstallPrompt } from './install.js';
 
 const temaGuardado = getLocal('theme') || 'light';
 document.documentElement.setAttribute('data-theme', temaGuardado);
@@ -23,6 +24,9 @@ async function handleRender() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Inicializar la lógica de instalación del PWA
+    initInstallPrompt();
+
     document.body.addEventListener('click', e => {
         if (e.target.matches('[data-link]')) {
             e.preventDefault();

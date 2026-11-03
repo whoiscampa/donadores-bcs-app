@@ -1,9 +1,10 @@
-const CACHE_NAME = 'donadores-bcs-shell-v3';
+const CACHE_NAME = 'donadores-bcs-shell-v4';
 const APP_SHELL = [
     '/',
     '/index.html',
-    '/manifest.json', 
-    '/icons/icon-192.png', 
+    '/manifest.json',
+    '/install.js',
+    '/icons/icon-192.png',
     '/icons/icon-512.png',
     '/icons/icon-512-maskable.png',
     '/icons/apple-touch-icon.png',
@@ -27,7 +28,7 @@ const APP_SHELL = [
 ];
 
 self.addEventListener('install', (event) => {
-    console.log('[Service Worker v3] Instalando y precacheando App Shell...');
+    console.log('[Service Worker v4] Instalando y precacheando App Shell...');
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then((cache) => cache.addAll(APP_SHELL))
@@ -36,13 +37,13 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-    console.log('[Service Worker v3] Activando y purgando cachés obsoletas...');
+    console.log('[Service Worker v4] Activando y purgando cachés obsoletas...');
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cacheName) => {
                     if (cacheName !== CACHE_NAME) {
-                        console.log('[Service Worker v3] Borrando caché antigua:', cacheName);
+                        console.log('[Service Worker v4] Borrando caché antigua:', cacheName);
                         return caches.delete(cacheName);
                     }
                 })
@@ -50,7 +51,6 @@ self.addEventListener('activate', (event) => {
         }).then(() => self.clients.claim())
     );
 });
-
 
 async function cacheFirst(request) {
     const cachedResponse = await caches.match(request);
@@ -124,7 +124,6 @@ function emergencyResponse() {
     );
 }
 
-
 self.addEventListener('fetch', (event) => {
     const request = event.request;
     const url = new URL(request.url);
@@ -133,7 +132,7 @@ self.addEventListener('fetch', (event) => {
         return; 
     }
 
-   if (request.mode === 'navigate') {
+    if (request.mode === 'navigate') {
         event.respondWith(
             caches.match('/index.html')
                 .then((cachedResponse) => {
