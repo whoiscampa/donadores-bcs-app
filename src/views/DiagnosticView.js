@@ -1,4 +1,6 @@
 import { getLocal, setLocal, getSession, setSession, getCookie, deleteCookie } from '../utils/storage.js';
+import { addToOutbox, getOutboxItems } from '../services/dbService.js';
+import { sincronizarColaManual } from '../services/syncService.js';
 
 export function DiagnosticView() {
     const container = document.createElement('div');
@@ -11,9 +13,13 @@ export function DiagnosticView() {
 
         const swSupported = 'serviceWorker' in navigator;
         const isSecureContext = window.isSecureContext;
+        const hasSyncManager = 'serviceWorker' in navigator && 'SyncManager' in window;
+        // (para forzar que se muestre el Plan B y su botón):
+        //const hasSyncManager = false;
         
         let registrationInfo = null;
         let controllerInfo = navigator.serviceWorker.controller ? navigator.serviceWorker.controller.scriptURL : 'Ninguno';
+        let outboxItems = [];
 
         if (swSupported) {
             try {
@@ -23,10 +29,78 @@ export function DiagnosticView() {
             }
         }
 
+        try {
+            outboxItems = await getOutboxItems();
+        } catch (e) {
+            console.error("Error al leer outbox", e);
+        }
+        if (!hasSyncManager && navigator.onLine && outboxItems.length > 0) {
+            sincronizarColaManual().then(() => renderDiagnostic());
+        }
+
         container.innerHTML = `
             <h2 class="text-2xl font-bold mb-2">Panel de Diagnóstico Integral</h2>
             <p class="text-gray-600 mb-6">Panel de control de Service Workers, verificadores y persistencia local.</p>
             
+            <!-- SECCIÓN FORMULARIO COLA OFFLINE (CON SOPORTE PLAN B) -->
+            <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding: 1.5rem; margin-bottom: 1.5rem; border-left: 5px solid #b91c1c;">
+                <h3 style="font-size: 1.25rem; font-weight: 700; color: #b91c1c; margin-bottom: 0.25rem;">Cola Offline (Outbox & Background Sync)</h3>
+                <p style="font-size: 0.85rem; color: #6b7280; margin-bottom: 1rem;">Registra una solicitud de donación para guardarla primero en IndexedDB antes de enviarla.</p>
+                
+                <!-- ESTADO DEL MODO Y PLAN B -->
+                <div style="background: ${hasSyncManager ? '#f0fdf4' : '#fff7ed'}; border: 1px solid ${hasSyncManager ? '#bbf7d0' : '#fed7aa'}; border-radius: 6px; padding: 0.85rem; margin-bottom: 1.25rem;">
+                    <p style="font-weight: 700; color: ${hasSyncManager ? '#166534' : '#9a3412'}; font-size: 0.85rem; margin-bottom: 0.2rem;">
+                        Modo: ${hasSyncManager ? 'Background Sync Nativo (Automático)' : 'Plan B (Manual / Evento Online)'}
+                    </p>
+                    <p style="font-size: 0.8rem; color: ${hasSyncManager ? '#15803d' : '#7c2d12'}; margin-bottom: ${hasSyncManager ? '0' : '0.65rem'};">
+                        ${hasSyncManager 
+                            ? 'Tu navegador soporta sincronización nativa en segundo plano.' 
+                            : 'SyncManager no disponible. Se usará el Plan B automático (evento online) y manual.'}
+                    </p>
+                    ${!hasSyncManager ? `
+                        <button id="btn-reintentar-manual" style="background: #ea580c; color: white; border: none; padding: 0.45rem 0.9rem; border-radius: 4px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">
+                            Reintentar ahora (Plan B)
+                        </button>
+                    ` : ''}
+                </div>
+
+                <form id="form-solicitud-offline" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.25rem;">
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; font-weight: 600; color: #374151; margin-bottom: 0.3rem;">Nombre del Donante</label>
+                        <input type="text" id="nombreDonante" required placeholder="Ej. Juan Pérez" style="width: 100%; padding: 0.65rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; box-sizing: border-box; outline: none;">
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div>
+                            <label style="display: block; font-size: 0.8rem; font-weight: 600; color: #374151; margin-bottom: 0.3rem;">Tipo de Sangre</label>
+                            <input type="text" id="tipoSangre" required placeholder="Ej. O+" style="width: 100%; padding: 0.65rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; box-sizing: border-box; outline: none;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.8rem; font-weight: 600; color: #374151; margin-bottom: 0.3rem;">Hospital de Destino</label>
+                            <input type="text" id="hospitalDestino" required placeholder="Ej. Hospital Salvatierra" style="width: 100%; padding: 0.65rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; box-sizing: border-box; outline: none;">
+                        </div>
+                    </div>
+
+                    <div>
+                        <button type="submit" style="background: #b91c1c; color: white; border: none; padding: 0.7rem 1.25rem; border-radius: 6px; font-weight: 600; font-size: 0.9rem; cursor: pointer;">
+                            Guardar Solicitud Offline (Outbox)
+                        </button>
+                    </div>
+                </form>
+
+                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <span style="font-weight: 700; color: #374151; font-size: 0.85rem;">Elementos pendientes en la cola:</span>
+                        <span style="background: #fee2e2; color: #991b1b; padding: 0.1rem 0.5rem; border-radius: 9999px; font-weight: 700; font-size: 0.8rem;">${outboxItems.length}</span>
+                    </div>
+                    <ul style="margin: 0; padding-left: 1.2rem; font-size: 0.85rem; color: #4b5563;">
+                        ${outboxItems.length > 0 
+                            ? outboxItems.map(item => `<li style="margin-bottom: 0.25rem;"><strong>${item.nombreDonante}</strong> (${item.tipoSangre}) — ${item.hospitalDestino}</li>`).join('') 
+                            : '<li style="list-style: none; margin-left: -1.2rem; font-style: italic; color: #9ca3af;">No hay solicitudes pendientes en la cola.</li>'}
+                    </ul>
+                </div>
+            </div>
+
             <!-- SECCIÓN: SERVICE WORKER Y SCOPE -->
             <div class="bg-white shadow rounded-lg p-5 mb-6 border-l-4 border-indigo-600">
                 <h3 class="text-xl font-bold mb-3 text-indigo-700">Estado del Service Worker</h3>
@@ -43,7 +117,7 @@ export function DiagnosticView() {
                 </button>
             </div>
 
-            <!-- SECCIÓN: SCOPE INVÁLIDO A PROPÓSITO (Nuevo Requisito) -->
+            <!-- SECCIÓN: SCOPE INVÁLIDO A PROPÓSITO -->
             <div class="bg-white shadow rounded-lg p-5 mb-6 border-l-4 border-red-600">
                 <h3 class="text-xl font-bold mb-2 text-red-700">Experimento: Scope Inválido a Propósito</h3>
                 <p class="text-xs text-gray-500 mb-4">Intenta registrar el Service Worker con un scope o dominio no permitido para observar la excepción en pantalla.</p>
@@ -113,6 +187,52 @@ export function DiagnosticView() {
                 </div>
             </div>
         `;
+
+        const formOffline = container.querySelector('#form-solicitud-offline');
+        if (formOffline) {
+            formOffline.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const solicitud = {
+                    nombreDonante: container.querySelector('#nombreDonante').value,
+                    tipoSangre: container.querySelector('#tipoSangre').value,
+                    hospitalDestino: container.querySelector('#hospitalDestino').value
+                };
+
+                try {
+                    await addToOutbox(solicitud);
+                    alert("¡Solicitud guardada en el Outbox de IndexedDB con éxito!");
+
+                    if (hasSyncManager) {
+                        const registration = await navigator.serviceWorker.ready;
+                        await registration.sync.register('sync-donaciones-pendientes');
+                        console.log("Background Sync registrado correctamente.");
+                    } else {
+                        console.log("SyncManager no disponible. Usando flujo Plan B.");
+                    }
+
+                    renderDiagnostic();
+                } catch (error) {
+                    console.error("Error al encolar la solicitud:", error);
+                    alert("Hubo un error al guardar localmente.");
+                }
+            });
+        }
+
+        const btnReintentar = container.querySelector('#btn-reintentar-manual');
+        if (btnReintentar) {
+            btnReintentar.addEventListener('click', async () => {
+                btnReintentar.textContent = 'Sincronizando...';
+                const exito = await sincronizarColaManual();
+                if (exito) {
+                    alert("¡Sincronización manual (Plan B) completada con éxito!");
+                    renderDiagnostic();
+                } else {
+                    alert("Hubo un error al sincronizar.");
+                    btnReintentar.textContent = 'Reintentar ahora (Plan B)';
+                }
+            });
+        }
+
         container.querySelector('#btn-refresh-sw').addEventListener('click', () => {
             renderDiagnostic();
         });

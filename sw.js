@@ -52,13 +52,66 @@ self.addEventListener('activate', (event) => {
     );
 });
 
+function openDatabase() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open('donadores-bcs-db', 2);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+function getAllOutboxItems(db) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction('outbox', 'readonly');
+        const store = tx.objectStore('outbox');
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+function deleteOutboxItem(db, id) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction('outbox', 'readwrite');
+        const store = tx.objectStore('outbox');
+        const req = store.delete(id);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
+}
+
+self.addEventListener('sync', (event) => {
+    if (event.tag === 'sync-donaciones-pendientes') {
+        console.log('[SW Background Sync] Evento disparado: procesando outbox...');
+        event.waitUntil(sincronizarDonaciones());
+    }
+});
+
+async function sincronizarDonaciones() {
+    try {
+        const db = await openDatabase();
+        const items = await getAllOutboxItems(db);
+
+        if (items.length === 0) {
+            console.log('[SW Sync] No hay registros pendientes en outbox.');
+            return;
+        }
+
+        for (const item of items) {
+            console.log('[SW Sync] Procesando solicitud:', item);
+            await deleteOutboxItem(db, item.id);
+            console.log(`[SW Sync] Registro ID ${item.id} sincronizado y eliminado del outbox.`);
+        }
+    } catch (error) {
+        console.error('[SW Sync] Error durante la sincronización:', error);
+        throw error;
+    }
+}
 async function cacheFirst(request) {
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
-        console.log(`[SW Cache First] HIT: ${request.url}`);
         return cachedResponse;
     }
-    console.log(`[SW Cache First] MISS, buscando en red: ${request.url}`);
     try {
         const networkResponse = await fetch(request);
         if (networkResponse && networkResponse.ok) {
@@ -77,12 +130,10 @@ async function networkFirst(request) {
         if (networkResponse && networkResponse.ok) {
             const cache = await caches.open(CACHE_NAME);
             cache.put(request, networkResponse.clone());
-            console.log(`[SW Network First] Red exitosa y actualizada en caché: ${request.url}`);
             return networkResponse;
         }
         throw new Error('Respuesta de red no válida');
     } catch (error) {
-        console.log(`[SW Network First] Sin red o error. Buscando en caché: ${request.url}`);
         const cachedResponse = await caches.match(request);
         if (cachedResponse) {
             return cachedResponse;
@@ -98,15 +149,11 @@ async function staleWhileRevalidate(request) {
     const fetchPromise = fetch(request).then((networkResponse) => {
         if (networkResponse && networkResponse.ok) {
             cache.put(request, networkResponse.clone());
-            console.log(`[SW SWR] Caché actualizada en segundo plano para: ${request.url}`);
         }
         return networkResponse;
-    }).catch(() => {
-        console.log(`[SW SWR] Fallo de red en segundo plano para: ${request.url}`);
-    });
+    }).catch(() => {});
 
     if (cachedResponse) {
-        console.log(`[SW SWR] Sirviendo desde caché inmediatamente: ${request.url}`);
         return cachedResponse;
     }
 
@@ -131,22 +178,13 @@ self.addEventListener('fetch', (event) => {
     if (request.method !== 'GET') {
         return; 
     }
-
     if (request.mode === 'navigate') {
         event.respondWith(
-            caches.match('/index.html')
-                .then((cachedResponse) => {
-                    if (cachedResponse) return cachedResponse;
-                    return caches.match('/');
-                })
-                .then((cachedResponse) => {
-                    if (cachedResponse) return cachedResponse;
-                    return caches.match('./index.html'); 
-                })
-                .then((cachedResponse) => {
-                    if (cachedResponse) return cachedResponse;
-                    return fetch(request).catch(() => caches.match('/index.html'));
-                })
+            caches.match('./index.html')
+                .then((res) => res || caches.match('index.html'))
+                .then((res) => res || caches.match('/index.html'))
+                .then((res) => res || fetch(request))
+                .catch(() => caches.match('./index.html'))
         );
         return;
     }
