@@ -4,23 +4,28 @@ import { ItemDetailView } from '../views/ItemDetailView.js';
 import { DiagnosticView } from '../views/DiagnosticView.js';
 import { FavoritesView } from '../views/FavoritesView.js';
 import { NotFoundView } from '../views/NotFoundView.js'; 
+import { CentrosView } from '../views/CentrosView.js'; 
 
 const routes = {
     '/': HomeView,
     '/about': AboutView,
     '/detalle': ItemDetailView,
-    '/detalle/:id': ItemDetailView,
-    '/item/:id': ItemDetailView, 
+    '/detalle/:id': ItemDetailView, 
+    '/item/:id': ItemDetailView,    
     '/diagnostico': DiagnosticView,
-    '/favoritos': FavoritesView
+    '/favoritos': FavoritesView,
+    '/centros': CentrosView
 };
 
+/**
+ * @param {string} path 
+ * @returns {object} 
+ */
 export function matchRoute(path) {
     const basePath = '/donadores-bcs-app';
     if (path.startsWith(basePath)) {
         path = path.slice(basePath.length) || '/';
     }
-
     if (routes[path]) {
         return { component: routes[path], params: {} };
     }
@@ -49,6 +54,5 @@ export function matchRoute(path) {
             }
         }
     }
-
     return { component: NotFoundView, params: {} };
 }

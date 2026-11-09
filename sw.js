@@ -1,4 +1,4 @@
-const CACHE_NAME = 'donadores-bcs-shell-v4';
+const CACHE_NAME = 'donadores-bcs-shell-v5'; 
 const APP_SHELL = [
     './',
     './index.html',
@@ -18,13 +18,16 @@ const APP_SHELL = [
     './src/services/registerSW.js',
     './src/services/apiService.js',
     './src/services/dbService.js',
+    './src/services/locationService.js', 
+    './src/services/shareService.js',   
     './src/components/ItemCard.js',
     './src/views/HomeView.js',
     './src/views/AboutView.js',
     './src/views/ItemDetailView.js',
     './src/views/DiagnosticView.js',
     './src/views/FavoritesView.js',
-    './src/views/NotFoundView.js'
+    './src/views/NotFoundView.js',
+    './src/views/CentrosView.js'         
 ];
 
 self.addEventListener('install', (event) => {
