@@ -1,4 +1,4 @@
-const CACHE_NAME = 'donadores-bcs-shell-v5'; 
+const CACHE_NAME = 'donadores-bcs-shell-v6'; // Subimos la versión a v6
 const APP_SHELL = [
     './',
     './index.html',
@@ -18,8 +18,9 @@ const APP_SHELL = [
     './src/services/registerSW.js',
     './src/services/apiService.js',
     './src/services/dbService.js',
-    './src/services/locationService.js', 
-    './src/services/shareService.js',   
+    './src/services/locationService.js',
+    './src/services/shareService.js',
+    './src/services/notificationService.js', // <-- ¡Nuevo servicio de notificaciones añadido!
     './src/components/ItemCard.js',
     './src/views/HomeView.js',
     './src/views/AboutView.js',
@@ -27,7 +28,7 @@ const APP_SHELL = [
     './src/views/DiagnosticView.js',
     './src/views/FavoritesView.js',
     './src/views/NotFoundView.js',
-    './src/views/CentrosView.js'         
+    './src/views/CentrosView.js'
 ];
 
 self.addEventListener('install', (event) => {
@@ -199,4 +200,28 @@ self.addEventListener('fetch', (event) => {
     } else {
         event.respondWith(cacheFirst(request));
     }
+
+    // Manejador del clic en la notificación (Requisito 4)
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close(); // Cierra la notificación
+
+    const urlToOpen = event.notification.data && event.notification.data.url ? event.notification.data.url : './';
+
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+            // Busca si ya hay una pestaña abierta de la PWA para enfocarla
+            for (let client of windowClients) {
+                if (client.url.includes(self.location.origin) && 'focus' in client) {
+                    client.navigate(urlToOpen);
+                    return client.focus();
+                }
+            }
+            // Si no hay pestañas abiertas, abre una nueva
+            if (clients.openWindow) {
+                return clients.openWindow(urlToOpen);
+            }
+        })
+    );
+});
+
 });

@@ -1,6 +1,7 @@
 import { getLocal, setLocal, getSession, setSession, getCookie, deleteCookie } from '../utils/storage.js';
 import { addToOutbox, getOutboxItems } from '../services/dbService.js';
 import { sincronizarColaManual } from '../services/syncService.js';
+import { solicitarPermisoNotificaciones, obtenerEstadoPermiso, mostrarNotificacionSincronizacion } from '../services/notificationService.js';
 
 export function DiagnosticView() {
     const container = document.createElement('div');
@@ -8,18 +9,19 @@ export function DiagnosticView() {
 
     async function renderDiagnostic() {
         const themeValue = getLocal('theme') || 'No definido';
-        const searchVal = getSession('lastSearch') || 'Ninguna búsqueda reciente';
+        const searchVal = getSession('lastSearch') || 'Ninguna búsqueda recente';
         const cookieVal = getCookie('visit_counter') || '0';
 
         const swSupported = 'serviceWorker' in navigator;
         const isSecureContext = window.isSecureContext;
         const hasSyncManager = 'serviceWorker' in navigator && 'SyncManager' in window;
-        // (para forzar que se muestre el Plan B y su botón):
-        //const hasSyncManager = false;
         
         let registrationInfo = null;
         let controllerInfo = navigator.serviceWorker.controller ? navigator.serviceWorker.controller.scriptURL : 'Ninguno';
         let outboxItems = [];
+
+        // Estado actual del permiso de notificaciones
+        const permisoNotif = obtenerEstadoPermiso();
 
         if (swSupported) {
             try {
@@ -35,19 +37,66 @@ export function DiagnosticView() {
             console.error("Error al leer outbox", e);
         }
         if (!hasSyncManager && navigator.onLine && outboxItems.length > 0) {
-            sincronizarColaManual().then(() => renderDiagnostic());
+            sincronizarColaManual().then(() => {
+                mostrarNotificacionSincronizacion(outboxItems.length);
+                renderDiagnostic();
+            });
         }
 
         container.innerHTML = `
             <h2 class="text-2xl font-bold mb-2">Panel de Diagnóstico Integral</h2>
-            <p class="text-gray-600 mb-6">Panel de control de Service Workers, verificadores y persistencia local.</p>
+            <p class="text-gray-600 mb-6">Panel de control de Service Workers, verificadores, persistencia y notificaciones.</p>
             
-            <!-- SECCIÓN FORMULARIO COLA OFFLINE (CON SOPORTE PLAN B) -->
+            <!-- SECCIÓN: CONTROL DE NOTIFICACIONES (EJERCICIO 5) -->
+            <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding: 1.5rem; margin-bottom: 1.5rem; border-left: 5px solid #4f46e5;">
+                <h3 style="font-size: 1.25rem; font-weight: 700; color: #4f46e5; margin-bottom: 0.25rem;">Control de Permisos de Notificación</h3>
+                <p style="font-size: 0.85rem; color: #6b7280; margin-bottom: 1.25rem;">Administra y prueba los permisos del sistema de notificaciones locales de la PWA.</p>
+                
+                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <span style="font-size: 0.9rem; font-weight: 600; color: #374151;">Estado actual del permiso:</span>
+                        <span style="padding: 0.2rem 0.6rem; border-radius: 9999px; font-weight: 700; font-size: 0.8rem; 
+                            ${permisoNotif === 'granted' ? 'background: #dcfce7; color: #166534;' : ''}
+                            ${permisoNotif === 'denied' ? 'background: #fee2e2; color: #991b1b;' : ''}
+                            ${permisoNotif === 'default' ? 'background: #fef3c7; color: #92400e;' : ''}">
+                            ${permisoNotif.toUpperCase()}
+                        </span>
+                    </div>
+
+                    ${permisoNotif === 'default' ? `
+                        <p style="font-size: 0.8rem; color: #4b5563;">Las notificaciones están pendientes de autorización. Haz clic para solicitar permiso con contexto.</p>
+                        <div>
+                            <button id="btn-pedir-notif" style="background: #4f46e5; color: white; border: none; padding: 0.6rem 1rem; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer;">
+                                Activar Notificaciones
+                            </button>
+                        </div>
+                    ` : ''}
+
+                    ${permisoNotif === 'granted' ? `
+                        <p style="font-size: 0.8rem; color: #166534;">¡Permiso concedido! Las notificaciones locales ante eventos del sistema están activas.</p>
+                        <div>
+                            <button id="btn-probar-notif" style="background: #16a34a; color: white; border: none; padding: 0.6rem 1rem; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer;">
+                                Probar Notificación de Sincronización
+                            </button>
+                        </div>
+                    ` : ''}
+
+                    ${permisoNotif === 'denied' ? `
+                        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 0.75rem;">
+                            <p style="font-size: 0.85rem; font-weight: 700; color: #991b1b; margin-bottom: 0.25rem;">Permiso bloqueado por el usuario</p>
+                            <p style="font-size: 0.8rem; color: #7f1d1d; margin: 0;">
+                                Para volver a habilitarlas, haz clic en el ícono de <strong>candado o configuración</strong> ubicado en la barra de direcciones de tu navegador, busca la sección de permisos de notificaciones y cámbiala a "Permitir" o "Preguntar". No es posible solicitar el permiso de nuevo por código.
+                            </p>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+
+            <!-- SECCIÓN FORMULARIO COLA OFFLINE -->
             <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding: 1.5rem; margin-bottom: 1.5rem; border-left: 5px solid #b91c1c;">
                 <h3 style="font-size: 1.25rem; font-weight: 700; color: #b91c1c; margin-bottom: 0.25rem;">Cola Offline (Outbox & Background Sync)</h3>
                 <p style="font-size: 0.85rem; color: #6b7280; margin-bottom: 1rem;">Registra una solicitud de donación para guardarla primero en IndexedDB antes de enviarla.</p>
                 
-                <!-- ESTADO DEL MODO Y PLAN B -->
                 <div style="background: ${hasSyncManager ? '#f0fdf4' : '#fff7ed'}; border: 1px solid ${hasSyncManager ? '#bbf7d0' : '#fed7aa'}; border-radius: 6px; padding: 0.85rem; margin-bottom: 1.25rem;">
                     <p style="font-weight: 700; color: ${hasSyncManager ? '#166534' : '#9a3412'}; font-size: 0.85rem; margin-bottom: 0.2rem;">
                         Modo: ${hasSyncManager ? 'Background Sync Nativo (Automático)' : 'Plan B (Manual / Evento Online)'}
@@ -117,55 +166,6 @@ export function DiagnosticView() {
                 </button>
             </div>
 
-            <!-- SECCIÓN: SCOPE INVÁLIDO A PROPÓSITO -->
-            <div class="bg-white shadow rounded-lg p-5 mb-6 border-l-4 border-red-600">
-                <h3 class="text-xl font-bold mb-2 text-red-700">Experimento: Scope Inválido a Propósito</h3>
-                <p class="text-xs text-gray-500 mb-4">Intenta registrar el Service Worker con un scope o dominio no permitido para observar la excepción en pantalla.</p>
-                <button id="btn-invalid-scope" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm font-semibold cursor-pointer">
-                    Probar Scope Inválido
-                </button>
-                <div id="invalid-scope-result" class="mt-3 p-3 bg-gray-100 rounded text-xs font-mono text-red-600 hidden"></div>
-            </div>
-
-            <!-- SECCIÓN: VERIFICADOR DE SCOPE -->
-            <div class="bg-white shadow rounded-lg p-5 mb-6 border-l-4 border-teal-600">
-                <h3 class="text-xl font-bold mb-2 text-teal-700">Verificador de Scope</h3>
-                <p class="text-xs text-gray-500 mb-4">Comprobación de rutas dentro y fuera del scope del Service Worker.</p>
-                
-                <div class="overflow-x-auto">
-                    <table class="min-w-full bg-white border border-gray-200 rounded-lg text-sm">
-                        <thead>
-                            <tr class="bg-gray-100 border-b text-left">
-                                <th class="py-2 px-3">Ruta a evaluar</th>
-                                <th class="py-2 px-3">Resultado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr class="border-b">
-                                <td class="py-2 px-3">/ (Raíz)</td>
-                                <td class="py-2 px-3 text-green-600 font-semibold">Dentro del scope</td>
-                            </tr>
-                            <tr class="border-b">
-                                <td class="py-2 px-3">/donadores-bcs-app/ (Raíz con sub-path)</td>
-                                <td class="py-2 px-3 text-green-600 font-semibold">Dentro del scope</td>
-                            </tr>
-                            <tr class="border-b">
-                                <td class="py-2 px-3">/src/router/router.js (Archivo interno)</td>
-                                <td class="py-2 px-3 text-green-600 font-semibold">Dentro del scope</td>
-                            </tr>
-                            <tr class="border-b">
-                                <td class="py-2 px-3">/donadores-bcs-app (Raíz sin diagonal final)</td>
-                                <td class="py-2 px-3 text-green-600 font-semibold">Dentro del scope</td>
-                            </tr>
-                            <tr class="border-b">
-                                <td class="py-2 px-3">https://google.com/ (Fuera del proyecto)</td>
-                                <td class="py-2 px-3 text-red-600 font-semibold">Fuera del scope</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
             <!-- SECCIÓN: PERSISTENCIA -->
             <div style="display: grid; gap: 1rem; margin-top: 1.5rem;">
                 <div style="background: #f5f5f5; padding: 1rem; border-radius: 6px; border-left: 4px solid #2196f3;">
@@ -188,6 +188,22 @@ export function DiagnosticView() {
             </div>
         `;
 
+        // Eventos de Notificaciones
+        const btnPedirNotif = container.querySelector('#btn-pedir-notif');
+        if (btnPedirNotif) {
+            btnPedirNotif.addEventListener('click', async () => {
+                await solicitarPermisoNotificaciones();
+                renderDiagnostic();
+            });
+        }
+
+        const btnProbarNotif = container.querySelector('#btn-probar-notif');
+        if (btnProbarNotif) {
+            btnProbarNotif.addEventListener('click', () => {
+                mostrarNotificacionSincronizacion(1);
+            });
+        }
+
         const formOffline = container.querySelector('#form-solicitud-offline');
         if (formOffline) {
             formOffline.addEventListener('submit', async (e) => {
@@ -201,15 +217,6 @@ export function DiagnosticView() {
                 try {
                     await addToOutbox(solicitud);
                     alert("¡Solicitud guardada en el Outbox de IndexedDB con éxito!");
-
-                    if (hasSyncManager) {
-                        const registration = await navigator.serviceWorker.ready;
-                        await registration.sync.register('sync-donaciones-pendientes');
-                        console.log("Background Sync registrado correctamente.");
-                    } else {
-                        console.log("SyncManager no disponible. Usando flujo Plan B.");
-                    }
-
                     renderDiagnostic();
                 } catch (error) {
                     console.error("Error al encolar la solicitud:", error);
@@ -224,6 +231,7 @@ export function DiagnosticView() {
                 btnReintentar.textContent = 'Sincronizando...';
                 const exito = await sincronizarColaManual();
                 if (exito) {
+                    mostrarNotificacionSincronizacion(outboxItems.length || 1);
                     alert("¡Sincronización manual (Plan B) completada con éxito!");
                     renderDiagnostic();
                 } else {
@@ -235,19 +243,6 @@ export function DiagnosticView() {
 
         container.querySelector('#btn-refresh-sw').addEventListener('click', () => {
             renderDiagnostic();
-        });
-
-        container.querySelector('#btn-invalid-scope').addEventListener('click', async () => {
-            const resultBox = container.querySelector('#invalid-scope-result');
-            resultBox.classList.remove('hidden');
-            try {
-                await navigator.serviceWorker.register('./sw.js', {
-                    scope: 'https://example.com/invalid-scope/'
-                });
-                resultBox.textContent = '¡Sorpresa! No falló (lo cual no debería pasar).';
-            } catch (error) {
-                resultBox.textContent = `Error capturado exitosamente:\n${error.name}: ${error.message}`;
-            }
         });
 
         container.querySelector('#btn-clear-local').addEventListener('click', () => {
